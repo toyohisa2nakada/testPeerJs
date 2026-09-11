@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html>
+
+<!--
+
+デスクトップでwebサーバを起動する。
+
+-->
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+    </style>
+</head>
+
+<body>
+    <div id="screen"></div>
+    <canvas id="marker_receiver_canvas" style="position: absolute;"></canvas>
+    <iframe id="inner_frame" src=""></iframe>
+</body>
+<!-- <script async src="https://ga.jspm.io/npm:es-module-shims@1.8.3/dist/es-module-shims.js"></script>
+<script type="importmap">
+    {
+        "imports": {
+            "three": "./three.js-master.r176/build/three.module.js",
+            "three/addons/": "./three.js-master.r176/examples/jsm/"
+        }
+    }
+</script> -->
+
+<script type="module">
+    [Array, "a2e"].reduce((a, e) => {
+        a.prototype[e] = function () { return this.reduce((e, f) => { f(e); return e; }); };
+        Object.defineProperty(a.prototype, e, { enumerable: false });
+    });
+    import * as THREE from 'three';
+
+    const params = {
+        painted_objs_life_ms: 15000,
+        pointer_life_ms: 1000,
+        falled_ball_interval_ms: 1000,
+
+        painter_mode: ["paint", "obj", "shot"][1],
+        enable_ball_fall: true,
+        enable_sound: false,
+    };
+
+    // htmlのセットアップ
+    const html_setup = () => {
+        const head_elem = document.getElementsByTagName("head")[0];
+        [
+            document.createElement("style"),
+            e => e.innerHTML = `html,body{height:100%;margin:0;}`,
+            // #${this._params.content_elem_id}{height:100vh;}`,
+            e => head_elem.appendChild(e),
+        ].a2e();
+        [
+            document.createElement("meta"),
+            e => e.setAttribute("name", "viewport"),
+            e => e.setAttribute("content", "width=device-width, initial-scale=1.0"),
+            e => head_elem.appendChild(e),
+        ].a2e();
+
+
+        const screen_wh = [document.body.clientWidth, document.body.clientHeight];
+        // inner frameのセットアップ
+        const inner_frame_elem = document.getElementById("inner_frame");
+        inner_frame_elem.src = "https://iutopia.i-u.ac.jp/"
+        inner_frame_elem.position = "absolute";
+        inner_frame_elem.left = "0px";
+        inner_frame_elem.top = "0px";
+        inner_frame_elem.style.border = "0px";
+        inner_frame_elem.width = screen_wh[0] - 18;
+        inner_frame_elem.height = screen_wh[1] - 18;
+
+        // canvasのセットアップ
+        const marker_canvas_margin = 20;
+        const marker_canvas_elem = document.getElementById("marker_receiver_canvas");
+        const canvas_wh = screen_wh.map(e => e - marker_canvas_margin * 2);
+        marker_canvas_elem.style.margin = `${marker_canvas_margin}px`;
+        marker_canvas_elem.width = canvas_wh[0];
+        marker_canvas_elem.height = canvas_wh[1];
+        marker_canvas_elem.style.zIndex = 3;
+        marker_canvas_elem.style.position = "absolute";
+        marker_canvas_elem.style.left = "0";
+        marker_canvas_elem.style.top = "0";
+        // 一次的に画面前面に表示されるcanvasのイベント処理を無視して、下に配置されているiFrameを操作する。
+        // marker_canvas_elem.style.pointerEvents = "none";
+
+        return { marker_canvas_elem, marker_canvas_ctx: marker_canvas_elem.getContext("2d", { willReadFrequently: true }) };
+    };
+    const { marker_canvas_elem, marker_canvas_ctx } = html_setup();
+
+
+    // canvas3dのセットアップ
+    import { Canvas3D } from "https://neko_editor.pecode.com/libs/Canvas3D.js";
+    // import * as THREE from 'three';
+    const Canvas3D_setup = async () => {
+        const threejs_path = "./src/libs/three.js-master.r176";
+        await Canvas3D._load_script(`${threejs_path}/examples/jsm/libs/ammo.wasm.js`);
+        Canvas3D._d3.THREE = THREE;
+        Canvas3D._d3.GLTFLoader = (await import("three/addons/loaders/GLTFLoader.js")).GLTFLoader;
+        // 物理世界の領域を0.005の部分だけ切り取ってcanvasにマップする。このscaleが小さいと物体をより近く
+        // で見ていることになるので、動きが早く見える。Canvas3Dのデフォルトは0.01である。
+        await Canvas3D.init(threejs_path, { params: { scale: 0.005 } });
+        await Canvas3D.init_canvas(marker_canvas_elem, { picking: true });
+    }
+    await Canvas3D_setup();
+
+
+    // 定期的に落下
+    const ball_fall_setup = () => {
+        const update = (vars) => {
+            const mag_limit = 200;
+            const mag_vel = Math.sqrt(vars.obj.userData.get_vel().vel.
+                map(e => Math.pow(e, 2)).reduce((a, e) => a + e));
+            // if (Math.abs(mag_vel - vars.obj.userData.mag_vel0) > mag_limit) {
+            //     sound?.();
+            //     quarks.add(quarks.createExplosion(vars.obj.userData.objThree.position, { rgba: [1.0, 1.0, 0.0, 1] }));
+            // }
+            vars.obj.userData.mag_vel0 = mag_vel;
+        };
+        setInterval(async () => {
+            await Canvas3D.createModelWithPhysics({
+                view: { type: "sphere", r: 20, color: 0xf3d186, opacity: 1., },
+                mass: 1, p: [Math.round(marker_canvas_elem.width / 2), 0], restitution: 0.6,
+                update,
+            });
+        }, params.falled_ball_interval_ms);
+    }
+    if (params.enable_ball_fall) {
+        ball_fall_setup();
+    }
+
+    // 効果音のセットアップ(enchat.jsのラップオブジェクト)
+    import { screen } from "https://neko_editor.pecode.com/libs/screen.js";
+    // const sound_setup = async () => {
+    //     const suika_asset_folder = "https://neko_editor.pecode.com/suika_assets/";
+    //     const suika_asset_sounds_folder = `${suika_asset_folder}sounds/`;
+    //     const suika_asset_libs_folder = `${suika_asset_folder}libs/`;
+    //     const sounds = (await import(`${suika_asset_libs_folder}enchant_js_sound.js`)).sounds;
+    //     screen.show(document.getElementById("screen"), () => {
+    //         // 音は読み込みに時間がかかるので非同期とする。
+    //         // sounds.play関数はinit処理が完了後に使用できるようになる（init前は呼び出しても音が鳴らないだけでエラーにはならない）
+    //         sounds.init([
+    //             { id: "koka", file: `${suika_asset_sounds_folder}sound_koka.mp3` },
+    //             { id: "papa", file: `${suika_asset_sounds_folder}sound_papa.mp3`, volume: 0.3 },
+    //             { id: "heavy", file: `${suika_asset_sounds_folder}sound_heavy.mp3` },
+    //             { id: "peen", file: `${suika_asset_sounds_folder}sound_peen.mp3` },
+    //             { id: "nya", file: `${suika_asset_sounds_folder}sound_nya.mp3` },
+    //         ], `${suika_asset_libs_folder}enchant.js`);
+    //     });
+    //     return function () {
+    //         sounds.play("papa");
+    //     }
+    // }
+    // const sound = params.enable_sound ? await sound_setup() : undefined;
+
+
+    const tap_points = {};
+    let rigid_bodies = [];
+    import { CanvasPointer } from "./src/CanvasPointer.mjs";
+    const touch_handler = async (evname, ev) => {
+        const add_tap_point = (evname, ev, uuid, color) => {
+            // 配列、または辞書型配列にデータを追加して、そのデータを返す関数
+            const add_key = (list, value, key) => {
+                key === undefined ? list.push(value) : list[key] = value;
+                return value;
+            };
+            const multi_points = tap_points.hasOwnProperty(uuid) ? tap_points[uuid] : add_key(tap_points, [], uuid);
+            const point_info = (evname === "touchstart" ? add_key(multi_points, { color, date: Date.now(), points: [] }) : multi_points[multi_points.length - 1]);
+            // point_info?.points.push(ev.userData?.offsets ?? [ev.offsetX, ev.offsetY]);
+            point_info?.points.push([ev.offsetX, ev.offsetY]);
+            download_mgr.added_new_record();
+            return point_info;
+        };
+
+        const uuid = ev.userData?.uuid ?? "";
+        const color = ev.userData?.color ?? "#000000";
+        const point_info = add_tap_point(evname, ev, uuid, color);
+        const pointer = CanvasPointer.get_pointer(uuid);
+        if (params.painter_mode === "shot" && evname === "touchstart" && pointer?.visibility === true) {
+            // const pt = pointer_points[uuid].pt;
+            const pt = pointer.pt;
+            const target_p = [pt[0], pt[1] - 800, -800];
+            const source_p = [...pt, Canvas3D.get_camera_pos()[2]];
+            const v = source_p.map((e, i) => target_p[i] - e);
+            await Canvas3D.createModelWithPhysics({
+                view: { type: "sphere", r: 40, color, opacity: 1., },
+                mass: 1, p: source_p, v,
+            })
+        } else if (params.painter_mode === "obj" && point_info?.points.length >= 2) {
+            const ct_sz = point_info.points.slice(-2).reduce((a, e) => ({
+                ct: a.map((ae, i) => (ae + e[i]) / 2),
+                sz: a.map((ae, i) => ae - e[i]),
+            }));
+            const len = Math.sqrt(ct_sz.sz.reduce((a, e) => a + Math.pow(e, 2), 0));
+            const angle = Math.atan2(-ct_sz.sz[1], ct_sz.sz[0]);
+
+            rigid_bodies.push({
+                t: Date.now(),
+                obj: await Canvas3D.createModelWithPhysics({
+                    view: { type: "box", sz: [len, 2, 100], color: point_info.color },
+                    mass: 0, p: [...ct_sz.ct, 0], r: [[0, 0, 1], angle], restitution: 0.6,
+                }),
+            });
+        } else if (params.painter_mode === "paint" && point_info?.points.length >= 2) {
+            if (color === "clear") {
+                marker_canvas_ctx.clearRect(...point_info.points[point_info.points.length - 1].map(e => e - 30), 60, 60);
+            } else {
+                marker_canvas_ctx.strokeStyle = color;
+                marker_canvas_ctx.lineWidth = 8;
+                marker_canvas_ctx.beginPath();
+                marker_canvas_ctx.moveTo(...point_info.points[point_info.points.length - 2]);
+                marker_canvas_ctx.lineTo(...point_info.points[point_info.points.length - 1]);
+                marker_canvas_ctx.stroke();
+            }
+        }
+    };
+    ["touchstart", "touchmove", "touchend"].forEach(name => {
+        marker_canvas_elem.addEventListener(name, ev => touch_handler(name, ev));
+    });
+    const pointer_handler = async (evname, ev) => {
+        const uuid = ev.userData?.uuid ?? "";
+        const color = ev.userData?.color ?? "#000000";
+        const pointer = CanvasPointer.get_pointer_safe(uuid);
+        if (evname === "pointerenter" || evname === "pointermove") {
+            if (ev.buttons) {
+                rigid_bodies.push({
+                    t: Date.now(),
+                    obj: await Canvas3D.createModelWithPhysics({
+                        view: { type: "box", sz: [10, 10, 100], color },
+                        mass: 0,
+                        // p: [...(ev.userData?.offsets ?? [ev.offsetX, ev.offsetY]), 0],
+                        p: [ev.offsetX, ev.offsetY, 100],
+                        restitution: 0.6,
+                    }),
+                });
+            }
+            pointer.set({
+                visibility: true,
+                color,
+                // pt: ev.userData?.offsets ?? [ev.offsetX, ev.offsetY],
+                pt: [ev.offsetX, ev.offsetY],
+                expiration_ms: Date.now() + params.pointer_life_ms,
+            })
+        } else if (evname === "pointerleave") {
+            pointer.set({ visibility: false })
+        }
+    };
+    // ["pointerenter", "pointermove", "pointerleave"].forEach(name => {
+    //     marker_canvas_elem.addEventListener(name, (ev) => pointer_handler(name, ev));
+    // });
+
+    // デバッグ用
+    setTimeout(async () => {
+        const rect = marker_canvas_elem.getBoundingClientRect();
+        const test_moving_by_manual_pos = [rect.width / 2 - 10, rect.height / 1.1, 0];
+        const texture_info = Canvas3D.createCanvasTexture({ wh: [500, 500], color: 0xffffff })
+        const obj = await Canvas3D.createModelWithPhysics({
+            view: { type: "sphere", r: 48, color: 0xffffff, map: texture_info.texture },
+            mass: 0, p: test_moving_by_manual_pos,
+        });
+        const img = new Image();
+        img.onload = function () {
+            texture_info.ctx.drawImage(img, 0, 0, texture_info.canvas.width, texture_info.canvas.height)
+            texture_info.texture.needsUpdate = true;
+        }
+        img.src = './images/500px-Mercator_projection_Square.jpg';
+
+        // let pointer = [0, 0];
+        // setInterval(() => {
+        //     texture_info.ctx.fillStyle = "red";
+        //     pointer = pointer.map((e, i) => e + (i === 0 ? 1 : 1));//(Math.random() > 0.5 ? 1 : -1));
+        //     texture_info.ctx.fillRect(...pointer, 3, 3);
+        //     texture_info.texture.needsUpdate = true;
+        // }, 1000)
+        setInterval(() => {
+            // obj.userData.objThree.rotateX(0.01)
+            obj.userData.objThree.rotateY(0.011)
+        }, 10)
+        marker_canvas_elem.addEventListener('pointermove', e => {
+            if (e.buttons) {
+                e.preventDefault();
+                const offsets = [e.offsetX, e.offsetY];
+                const intersects = Canvas3D.raycast({
+                    coords: [
+                        (offsets[0] / marker_canvas_elem.width) * 2 - 1,
+                        -1 * ((offsets[1] / marker_canvas_elem.height) * 2 - 1)
+                    ],
+                    threejs_objects: [obj.userData.objThree]
+                })
+                if (intersects[0]?.object === obj.userData.objThree) {
+                    const hit = intersects[0];
+                    const x = hit.uv.x * texture_info.canvas.width;
+                    const y = (1 - hit.uv.y) * texture_info.canvas.height;
+                    texture_info.ctx.fillStyle = e.userData?.color ?? "green";
+                    texture_info.ctx.beginPath();
+                    texture_info.ctx.arc(x, y, 10, 0, Math.PI * 2);
+                    texture_info.ctx.fill();
+                    texture_info.texture.needsUpdate = true;
+                }
+            }
+        })
+
+
+        // 画面の中心位置に印になる球オブジェクトを置く
+        // await Canvas3D.createModelWithPhysics({
+        //     view: { type: "sphere", r: 2, color: 0x00ff00 }, mass: 0, p: [rect.width / 2, rect.height / 2, 0]
+        // })
+        // await Canvas3D.createModelWithPhysics({
+        //     view: { type: "sphere", r: 100, color: 0xff00ff }, mass: 0, p: [rect.width / 2, rect.height / 2 - 100, 0]
+        // })
+
+    }, 2000)
+
+    const shot_setup = async () => {
+        const center = [Math.round(marker_canvas_elem.width / 2), Math.round(marker_canvas_elem.height / 1.5)];
+        const color = "#0000ff";
+        const splits = 360 / 2;
+        const r = 80;
+        const w = 8;
+
+        for (let p = 0; p < splits; p += 1) {
+            const sitas = [p, p + 1].map(e => 2 * Math.PI * e / splits);
+            const [p0, p1] = sitas.map(sita => [Math.cos(sita), Math.sin(sita)].map((e, i) => center[i] + r * e));
+            await Canvas3D.createModelWithPhysics({
+                view: { type: "box", sz: [4, 4, 2000], color },
+                mass: 0, p: [...p0, -2000], restitution: 0.6,
+            });
+        }
+
+        // test for invader
+        await Canvas3D.createModelWithPhysics({
+            view: { type: "box", sz: [40, 40, 2000], color },
+            mass: 0, p: [center[0], center[1] - 200, -2000],
+        });
+        await Canvas3D.createModelWithPhysics({
+            userData: {},
+            view: {
+                type: "model", model_collision_shape: "box", opacity: 0.0,
+                url: "3d_models/invader.glb", sz: [600, 200, 10],
+            },
+            mass: 0, p: [center[0], 100, -2000], v: [0, 0, 0],
+            r: [[0, 1, 0], Math.PI / 2],
+            update: function (opts) {
+                if (this.userData.collided_rigidBodies.length > 0) {
+                    console.log("HIT!")
+                }
+            },
+        });
+    }
+    if (params.painter_mode === "shot") {
+        await shot_setup();
+    }
+
+    // ログの保存
+    const download_mgr = {
+        done: true,
+        beforeunload_handler: e => {
+            e.preventDefault();
+            e.returnValue = "";
+        },
+        added_new_record: function () {
+            if (this.done === true) {
+                window.addEventListener("beforeunload", this.beforeunload_handler);
+            }
+            this.done = false;
+        },
+        json_download: function (filename, json) {
+            [
+                document.createElement("a"),
+                e => e.href = URL.createObjectURL(new Blob([JSON.stringify(json)], { type: "application/json" })),
+                e => e.download = filename,
+            ].a2e().click();
+            if (this.done === false) {
+                window.removeEventListener("beforeunload", this.beforeunload_handler);
+            }
+            this.done = true;
+        },
+    };
+    document.body.addEventListener("keyup", e => {
+        if (e.key === "d") {
+            download_mgr.json_download("tap_points.json", Object.entries(tap_points).map(e =>
+                [e[0], e[1].map(e => ({ color: e.color, date: e.date, points_length: e.points.length }))]));
+        } else if (e.key === "a") {
+            download_mgr.json_download("tap_points_all.json", tap_points);
+        } else if (e.key === " ") {
+            // debug
+            console.log(`scene.children.length=${Canvas3D.get_scene().children.length}`)
+        }
+    });
+
+    // フレームレートの描画
+    // import { Stats } from "../libs/Stats.min.mjs";
+    // const stats = Stats.customInit({ max_fps: 90 });
+
+    // テスト: 爆発エフェクト
+    // import { libQuarks } from '../libs/three-explosion/dist/explosion-bundle.js';
+    // const quarks = new libQuarks(Canvas3D.get_scene());
+
+    // テスト: 画面の奥の敵
+    const enemy_setup = async () => {
+        const enemy = await Canvas3D.createModelWithPhysics({
+            view: { type: 'box', sz: [80, 80, 10], color: "red" },
+            mass: 0, p: [200, 200, -200],
+        })
+
+        const shot = async () => {
+            const enemy_p = enemy.userData.get_pos().p.map((e, i) => i === 2 ? e + 10 : e);
+            const bullet = await Canvas3D.createModelWithPhysics({
+                view: { type: 'box', sz: [10, 10, 10], color: "pink" },
+                mass: 1, p: enemy_p,
+            })
+            bullet.setGravity(new Ammo.btVector3(0, 0, 0));
+            const camera_p = Canvas3D.get_camera_pos();
+            const target_p = camera_p;
+            const vec = new Ammo.btVector3(...target_p.map((e, i) => i === 1 ? enemy_p[i] - e : e - enemy_p[i]));
+            vec.normalize();
+            bullet.applyCentralImpulse(vec);
+
+            // setTimeout(() => {
+            //     quarks.explodeObject(bullet.userData.objThree, { rgba: [0.0, 0.0, 1.0, 1.0] });
+            // }, 5000)
+        }
+
+        // 2点間の座標を割合に応じて補間して、中間の位置を計算する関数
+        const lerp = (p0, p1, t) => {
+            return p0.map((p, i) => p + (p1[i] - p) * t);
+        }
+        // 指定時間(ms)だけ処理を待つ
+        const wait = async (ms) => {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        function enemy_action_start() {
+            const enemy_action = async () => {
+                const source_p = enemy.userData.get_pos().p;
+                const target_p = [
+                    marker_canvas_elem.width * Math.random(),
+                    marker_canvas_elem.height * Math.random(),
+                    enemy.userData.get_pos().p[2]
+                ];
+                await new Promise(async resolve => {
+                    for (let t = 0.0; t <= 1.0; t += 0.01) {
+                        enemy.userData.set_pos({ p: [...lerp(source_p, target_p, t)] });
+                        await wait(5);
+                    }
+                    resolve();
+                });
+                await wait(500);
+                await shot();
+                setTimeout(enemy_action, 10000 * Math.random() + 2000);
+            }
+            enemy_action();
+        }
+        enemy_action_start();
+
+        // setInterval(async () => {
+        //     await shot();
+        // }, 1000)
+    }
+    // await enemy_setup();
+
+    import { marker_receiver } from "./src/marker_receiver.mjs";
+    marker_receiver.init({ canvas_elem: marker_canvas_elem });
+
+    let prev_tm = Date.now();
+    const render = () => {
+        const t1 = Date.now();
+        rigid_bodies.filter(e => e.t + params.painted_objs_life_ms < t1).forEach(e => Canvas3D.deleteModelWithPhysics(e.obj));
+        rigid_bodies = rigid_bodies.filter(e => e.t + params.painted_objs_life_ms >= t1);
+
+        const dt = t1 - prev_tm;
+        // stats?.customUpdate(1000.0 / dt);
+
+        if (params.painter_mode !== "paint") {
+            marker_canvas_ctx.clearRect(0, 0, marker_canvas_elem.width, marker_canvas_elem.height);
+        }
+
+        /* paintは、renderでその都度書くのではなく、websocketを受信したときに書くようにする。
+           消す処理を追加するために、とりあえずこうしている。
+        if (params.painter_mode === "paint") {
+            Object.keys(tap_points).forEach(color => {
+                tap_points[color] = tap_points[color].filter(e => e.length > 0);
+                marker_canvas_ctx.strokeStyle = color;
+                marker_canvas_ctx.lineWidth = 4;
+                tap_points[color].forEach(points => {
+                    marker_canvas_ctx.beginPath();
+                    marker_canvas_ctx.moveTo(...points[0]);
+                    points.slice(1).forEach(p => marker_canvas_ctx.lineTo(...p));
+                    marker_canvas_ctx.stroke();
+                });
+            })
+        }
+        /**/
+        Canvas3D?.render();
+        /* pointerの描画 */
+        if (params.painter_mode !== "paint") {
+            // Object.entries(pointer_points).filter(([_, p]) => p.expiration_ms < t1).forEach(([_, p]) => p.visibility = false);
+            // Object.entries(pointer_points).filter(([_, p]) => p.visibility).forEach(([uuid, p]) => {
+            //     marker_canvas_ctx.strokeStyle = p.color;
+            //     marker_canvas_ctx.lineWidth = 8;
+            //     marker_canvas_ctx.beginPath();
+            //     marker_canvas_ctx.arc(...p.pt, 10, 0, Math.PI * 2);
+            //     marker_canvas_ctx.stroke();
+            // });
+            CanvasPointer.update_visibility(t1);
+            CanvasPointer.draw(marker_canvas_ctx);
+        }
+        marker_receiver.render();
+
+        // quarks.update();
+
+        prev_tm = t1;
+        requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+
+</script>
+
+</html>

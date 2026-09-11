@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>InkChase 3D Sample</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="marker_receiver_canvas" style="position: absolute;"></canvas>
+    <script async src="https://ga.jspm.io/npm:es-module-shims@1.8.3/dist/es-module-shims.js"></script>
+    <!-- <script type="importmap">
+    {
+        "imports": {
+            "three": "../libs/three.js-master.r176/build/three.module.js",
+            "three/addons/": "../libs/three.js-master.r176/examples/jsm/"
+        }
+    }
+    </script> -->
+    <script type="module">
+        // import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.157/build/three.module.js';
+        // import * as THREE from "https://unpkg.com/three@0.165.0/build/three.module.js";
+        // import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.157/examples/jsm/controls/OrbitControls.js';
+        import * as THREE from 'three';
+        // import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // explosion
+        // import { libQuarks } from '../libs/three-explosion/dist/explosion-bundle.js';
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xaaaaaa);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 10, 60);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // const controls = new OrbitControls(camera, renderer.domElement);
+
+        // const explosionSystem = new ExplosionSystem(scene);
+        // const quarks = new libQuarks(scene);
+
+        // --- Lights ---
+        const light = new THREE.DirectionalLight(0xffffff, 2);
+        light.position.set(10, 20, 10);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+        // --- CanvasTexture Helper ---
+        function createPaintableCanvas(color, w, h) {
+            const canvas = document.createElement('canvas');
+            const u2px = 20;
+            canvas.width = w * u2px;
+            canvas.height = h * u2px;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const tex = new THREE.CanvasTexture(canvas);
+            return { canvas, ctx, texture: tex };
+        }
+
+        // --- Floor and Wall ---
+        // const floorSize = [80, 90];
+        // const floorData = createPaintableCanvas('#ffffff', ...floorSize);
+        // const floorGeo = new THREE.PlaneGeometry(...floorSize);
+        // const floorMat = new THREE.MeshStandardMaterial({ map: floorData.texture });
+        // const floor = new THREE.Mesh(floorGeo, floorMat);
+        // floor.rotation.x = -Math.PI / 2;
+        // floor.position.y = -2;
+        // scene.add(floor);
+        // floor.userData.canvasData = floorData;
+        const floor = undefined;
+
+        const wallSize = [80, 110];
+        const wallData = createPaintableCanvas('#ffffff', ...wallSize);
+        const wallGeo = new THREE.PlaneGeometry(...wallSize);
+        const wallMat = new THREE.MeshStandardMaterial({ map: wallData.texture });
+        const wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.position.z = -25;
+        wall.position.y = 8;
+        scene.add(wall);
+        wall.userData.canvasData = wallData;
+
+        // --- Moving Target ---
+        const targets = {
+            _objects: [],
+            add: function (idx) {
+                const targetR = 2;
+                const targetSize = [2 * Math.PI * targetR, 2 * Math.PI * targetR];
+                const targetData = createPaintableCanvas('#ffffff', ...targetSize);
+                const targetGeo = new THREE.SphereGeometry(targetR, 64, 64);
+                // const targetGeo = new THREE.BoxGeometry(3, 3, 3);
+                const targetMat = new THREE.MeshStandardMaterial({ map: targetData.texture });
+                const target = new THREE.Mesh(targetGeo, targetMat);
+                target.position.set(5 * idx - 10, 0, 0);
+                scene.add(target);
+
+                target.userData.type = "target";
+                target.userData.index = idx;
+                target.userData.canvasData = targetData;
+
+                this._objects.push(target);
+            },
+            remove: function (obj) {
+                this._objects.splice(this._objects.indexOf(obj), 1);
+            },
+            objects: function () {
+                return this._objects;
+            },
+        }
+        Array(5).keys().forEach(i => {
+            targets.add(i);
+        })
+
+        // --- Raycaster ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        // --- Brush Settings ---
+        const brushRadius = 30;  // pixels
+        const scatterRadius = 50;
+        const inkColors = ['#40F73E', '#FA5B00', '#1AC8B4', '#E64072'];
+        let inkColor_index = 0;
+
+        // --- Helper to draw on canvas ---
+        function drawOnCanvas(objData, uv, radius, color) {
+            const x = uv.x * objData.canvas.width;
+            const y = (1 - uv.y) * objData.canvas.height;
+            objData.ctx.fillStyle = color ?? inkColors[inkColor_index];
+            objData.ctx.beginPath();
+            objData.ctx.arc(x, y, radius, 0, Math.PI * 2);
+            objData.ctx.fill();
+            objData.texture.needsUpdate = true;
+        }
+
+        // --- Mouse / Touch Event ---
+        function paint(event) {
+            // console.log(event)
+            event.preventDefault();
+            const rect = renderer.domElement.getBoundingClientRect();
+            // console.log(`1 ${event.clientX-rect.left} 2:${event.userData?.offsets[0]}`)
+            //             const offsets = event.userData?.offset
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const objs = [...targets.objects(), floor, wall].filter(e => e !== undefined);
+            const intersects = raycaster.intersectObjects(objs);
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                // 塗る
+                drawOnCanvas(hit.object.userData.canvasData, hit.uv, brushRadius, event.userData?.color);
+
+                // 塗った面積の算出
+                if (hit.object.userData.type === "target") {
+                    function colorRatio(canvasData) {
+                        const color_ratios = {};
+                        const imageData = canvasData.ctx.getImageData(0, 0, canvasData.canvas.width, canvasData.canvas.height);
+                        const pixels = imageData.data;
+                        for (let i = 0; i < pixels.length; i += 4) {
+                            const color_strings = JSON.stringify(pixels.slice(i, i + 3));
+
+                            let count = color_ratios[color_strings] ?? 0;
+                            color_ratios[color_strings] = count + 1;
+                        }
+                        const n_pixels = pixels.length / 4;
+                        Object.keys(color_ratios).forEach(k => {
+                            color_ratios[k] /= n_pixels;
+                        })
+                        return color_ratios;
+                    }
+                    const color_ranking = Object.entries(colorRatio(hit.object.userData.canvasData)).sort((e0, e1) => e1[1] - e0[1]);
+                    const color = Object.values(JSON.parse(color_ranking[0][0]));
+                    if (!(color[0] === 255 && color[1] === 255 && color[2] === 255) && color_ranking[0][1] >= 0.4) {
+                        // const quarks = new libQuarks(scene);
+                        // quarks.explodeObject(hit.object, { rgba: [...color.map(e => e / 255), 1.0], size: [0.1, 1], speed: [20, 50] });
+                        targets.remove(hit.object);
+                        setTimeout(() => {
+                            targets.add(hit.object.userData.index);
+                        }, 2000);
+                        event.userData?.channel.send("explosion");
+                    } else {
+                        event.userData?.channel.send("painted");
+                    }
+                }
+
+                // 飛び散り
+                // if (hit.object === target) {
+                //     for (let i = 0; i < 10; i++) {
+                //         const offset = new THREE.Vector3(
+                //             (Math.random() - 0.5) * scatterRadius,
+                //             (Math.random() - 0.5) * scatterRadius,
+                //             (Math.random() - 0.5) * scatterRadius
+                //         );
+                //         const scatterPoint = hit.point.clone().add(offset);
+                //         raycaster.set(scatterPoint, new THREE.Vector3(0, -1, 0));
+                //         const scatterHit = raycaster.intersectObjects([floor, wall]);
+                //         if (scatterHit.length > 0) {
+                //             const sHit = scatterHit[0];
+                //             drawOnCanvas(sHit.object.userData.canvasData, sHit.uv, brushRadius / 2);
+                //         }
+                //     }
+                // }
+            }
+        }
+
+        // renderer.domElement.addEventListener('pointerenter', paint);
+        renderer.domElement.addEventListener('pointermove', (e) => {
+            if (e.buttons) paint(e)
+        });
+        // renderer.domElement.addEventListener('touchstart', paint);
+        // renderer.domElement.addEventListener('touchmove', (e) => { paint(e) });
+
+        // --- Animation ---
+        let t = 0;
+        let isCircling = false;
+        function animate() {
+            requestAnimationFrame(animate);
+            // if (isCircling) {
+            //     t += 0.02;
+            //     target.position.x = Math.sin(t) * 10;
+            //     target.position.z = Math.cos(t) * 10;
+            // }
+            targets.objects().forEach(e => e.rotation.y += 0.02);
+            // quarks.update();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- keyboard input ---
+        document.addEventListener('keydown', e => {
+            if (e.key === 'c') {
+                isCircling = !isCircling;
+            } else if (e.key === 'a') {
+                inkColor_index = (inkColor_index + 1) % inkColors.length;
+            }
+        })
+
+
+        import { marker_receiver } from "./src/marker_receiver.mjs";
+        // canvasのセットアップ
+        const screen_wh = [document.body.clientWidth, document.body.clientHeight];
+        // console.log(screen_wh)
+        const canvas_margin = 20;
+        const canvas_elem = document.getElementById("marker_receiver_canvas");
+        const canvas_wh = screen_wh.map(e => e - canvas_margin * 2);
+        canvas_elem.style.margin = `${canvas_margin}px`;
+        canvas_elem.width = canvas_wh[0];
+        canvas_elem.height = canvas_wh[1];
+        canvas_elem.style.zIndex = 3;
+        canvas_elem.style.position = "absolute";
+        canvas_elem.style.left = "0";
+        canvas_elem.style.top = "0";
+        canvas_elem.style.pointerEvents = "none";
+        const ctx = canvas_elem.getContext("2d", { willReadFrequently: true });
+        marker_receiver.init({ canvas_elem, event_target_elem: document.querySelectorAll("canvas")[1] });
+        const render = () => {
+            marker_receiver.render();
+            requestAnimationFrame(render);
+            CanvasPointer.update_visibility(Date.now());
+            CanvasPointer.draw(ctx);
+        }
+        requestAnimationFrame(render);
+
+        import { CanvasPointer } from "./src/CanvasPointer.mjs";
+        const pointer_handler = (evname, ev) => {
+            const uuid = ev.userData?.uuid ?? "";
+            const color = ev.userData?.color ?? "#000000";
+            const pointer = CanvasPointer.get_pointer_safe(uuid);
+            if (evname === "pointerenter" || evname === "pointermove") {
+                pointer.set({
+                    visibility: true,
+                    color,
+                    pt: ev.userData?.offsets ?? [ev.offsetX, ev.offsetY],
+                    expiration_ms: Date.now() + 1000,
+                })
+            } else if (evname === "pointerleave") {
+                pointer.set({ visibility: false })
+            }
+        };
+        // ["pointerenter", "pointermove", "pointerleave"].forEach(name => {
+        //     document.querySelectorAll("canvas")[1].addEventListener(name, (ev) => pointer_handler(name, ev));
+        // });
+
+    </script>
+</body>
+
+</html>

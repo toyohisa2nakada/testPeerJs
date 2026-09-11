@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+        }
+
+        #header {
+            height: 8px;
+            width: auto;
+        }
+
+        #stats {
+            position: relative;
+            width: 100%;
+        }
+
+        #video_controller {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="video_controller"></div>
+    <div id="face_console"></div>
+    <div id="stats"></div>
+</body>
+<script type="module">
+    // 配列の最初でオブジェクトを指定して、そのあとの関数で値をセットする。Object.keysで一覧に現れないようにenumerable:falseとしている。
+    // [document.createElement("div"),e=>e.style.cssText="display:inline-block"].a2e() のようにして使用する。
+    [Array, "a2e"].reduce((a, e) => { a.prototype[e] = function () { return this.reduce((e, f) => { f(e); return e; }); }; Object.defineProperty(a.prototype, e, { enumerable: false }); });
+
+    // three.jsなどで使えるパフォーマンスモニター(オリジナルを少し修正している)
+    const init_stats_max_fps = 90;
+    import { Stats } from "./Stats.min.mjs";
+    const setupStats = () => {
+        const stats = new Stats();
+        // 更新頻度の高い独自のFPSを表示するパネルを追加する。描画は、stats.customFpsPanel.updateによりfps値は独自に計算したものを与える。
+        stats.customFpsPanel = stats.addPanel(new Stats.Panel('FPS', '#0ff', '#002'));
+        stats.showPanel(stats.domElement.children.length - 1);
+        const parent = document.getElementById("stats");
+        stats.domElement.style.cssText += ";display:inline-block";
+        parent.appendChild(stats.domElement);
+        parent.appendChild([
+            document.createElement("div"),
+            e => e.appendChild(document.createTextNode(` y軸の最大値 ${init_stats_max_fps}fps`)),
+            e => e.style.cssText = "display:inline-block",
+        ].a2e());
+        return stats;
+    };
+    const stats = setupStats();
+
+    // 顔認識
+    import { UltraFace } from "./UltraFace.js";
+    await UltraFace.init();
+
+    // camera
+    // videoのresolutionはUltraFaceの入力データサイズとするが、スマートフォンでvideo elementの
+    // 縦横が自動的に変わるので、videoのサイズは正方向とする。そのためUltraFaceの入力サイズのうち
+    // 大きい方に合わせて正方形として、その正方形からUltraFaceの入力サイズを切り取って予測する。
+    import { camera } from "./camera.js";
+    await camera.init({
+        video_controller_elem: document.getElementById("video_controller"),
+        video_resolution: UltraFace._params.wh
+            .reduce((a, e) => { const mx = Math.max(a, e); return [mx, mx] }),
+    });
+
+    const device = camera._devices.filter(e => e.label.includes("front"))[0] ??
+        camera._devices.filter(e => e.label.includes("Integrated"))[0];
+    if (device !== undefined) {
+        camera.set_device({ deviceId: device.deviceId });
+    }
+
+
+
+    let prev_tm = Date.now();
+    let frameCount = 0;
+    const render = async () => {
+        const tm = Date.now();
+        const dt = tm - prev_tm;
+        frameCount += 1;
+
+        // カメラデバイス
+        camera.render();
+
+        // cameraからのデータ
+        const wh = [camera._recognition_canvas.width, camera._recognition_canvas.height];
+        const imageData = camera._recognition_canvas.userData.imageData;
+        const ctx = camera._video_canvas.userData.ctx;
+
+        // 顔認識
+        const img = new Uint8ClampedArray(UltraFace._params.wh.reduce((a, e) => a * e) * 4);
+        const x0_w = [Math.trunc((imageData.width - UltraFace._params.wh[0]) / 2)
+            , UltraFace._params.wh[0]];
+        const y0_h = [Math.trunc((imageData.height - UltraFace._params.wh[1]) / 2)
+            , UltraFace._params.wh[1]];
+        for (let y = y0_h[0]; y < y0_h[0] + y0_h[1]; y += 1) {
+            for (let x = x0_w[0]; x < x0_w[0] + x0_w[1]; x += 1) {
+                const p0 = y * imageData.width + x;
+                const p1 = (y - y0_h[0]) * x0_w[1] + (x - x0_w[0]);
+                for (let ch = 0; ch < 4; ch += 1) {
+                    img[p1 * 4 + ch] = imageData.data[p0 * 4 + ch];
+                }
+            }
+        }
+
+        const faces = await UltraFace.predict(img);
+        let face_outputs = "";
+        faces.slice(1, 2).forEach((f, i) => {
+            ctx.strokeRect(f.bbox[0] * wh[0] + x0_w[0], f.bbox[1] * wh[1] + y0_h[0],
+                (f.bbox[2] - f.bbox[0]) * x0_w[1], (f.bbox[3] - f.bbox[1]) * y0_h[1]);
+
+            face_outputs += (face_outputs.length !== 0 ? ", " : "") +
+                [...Array(2).keys()].map((e, i) => ((f.bbox[i] + f.bbox[i + 2]) / 2).toPrecision(2)).join(" ");
+        });
+        document.getElementById("face_console").innerText = face_outputs;
+
+        // fpsの描画
+        stats.update();
+        stats.customFpsPanel.update(1000.0 / dt, init_stats_max_fps);
+
+        requestAnimationFrame(render);
+        prev_tm = tm;
+    };
+
+
+    requestAnimationFrame(render);
+
+</script>
+
+</html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    <style>
+    </style>
+</head>
+
+<body>
+</body>
+<script src="./src/libs/hammer.min.js"></script>
+<script type="module">
+
+    // 要素を作ってプロパティを設定する。
+    [Array, "a2e"].reduce((a, e) => {
+        a.prototype[e] = function () { return this.reduce((e, f) => { f(e); return e; }); };
+        Object.defineProperty(a.prototype, e, { enumerable: false });
+    });
+    // 配列から1つの要素を選択する。
+    [Array, "choice"].reduce((a, e) => {
+        a.prototype[e] = function () { return this[Math.floor(this.length * Math.random())]; };
+        Object.defineProperty(a.prototype, e, { enumerable: false });
+    });
+    const { smartphone_camera } = await import(`./src/libs/webcamera/smartphone_camera.js`);
+    let video_info = await smartphone_camera.init();
+
+    // lil_guiに表示するパラメータ文字列の設定
+    const set_output_canvas_info_to_params = (video_info, output_canvas_info, params) => {
+        params.output_canvas_wh = JSON.stringify(output_canvas_info.settings.wh);
+        params.output_canvas_css_wh = JSON.stringify(output_canvas_info.settings.wh_css);
+        params.output_canvas_camera_wh = JSON.stringify(output_canvas_info.settings.camera_wh);
+        params.recognition_canvas_wh = JSON.stringify(output_canvas_info.settings.recognition_canvas_wh);
+    };
+
+    // color picker
+    const brush_colors = [
+        '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff',
+    ];
+    const brush_color = brush_colors.choice();
+    // const brush_color = "#ffff00";  // プレゼン資料作成用
+    document.body.appendChild([
+        document.createElement("div"),
+        // e => e.style.display = "none", // プレゼン資料作成用
+        // e => e.style.display = "flex",
+        e => e.style.position = "absolute",
+        e => e.style.left = "0px",
+        e => e.style.top = "0px",
+        e => e.style.flexDirection = "column",
+        e => e.appendChild([
+            document.createElement("input"),
+            e => e.type = "color",
+            e => e.setAttribute("list", "color-picker"),
+            e => e.style.width = "108px",
+            e => e.style.height = "48px",
+            e => e.value = brush_color,
+            e => e.addEventListener("change", e => {
+                document.getElementById("clear_ckbox").checked = false;
+                CanvasScreenPainter.set_params({ brush_color: e.target.value, clear_color: false });
+            }),
+        ].a2e()),
+        e => e.appendChild([
+            document.createElement("datalist"),
+            e => e.id = "color-picker",
+            e => brush_colors.forEach(c => {
+                e.appendChild([
+                    document.createElement("option"),
+                    e => e.value = c,
+                ].a2e())
+            }),
+        ].a2e()),
+        e => e.appendChild([
+            document.createElement("div"),
+            e => e.style.display = "flex",
+            e => e.style.justifyContent = "center",
+            e => e.style.alignItems = "center",
+            e => e.appendChild([
+                document.createElement("input"),
+                e => e.id = "clear_ckbox",
+                e => e.type = "checkbox",
+                e => e.addEventListener("change", e => {
+                    CanvasScreenPainter.set_params({ clear_color: e.target.checked });
+                }),
+            ].a2e()),
+            e => e.appendChild([
+                document.createElement("label"),
+                e => e.setAttribute("for", "clear_ckbox"),
+                e => e.style.backgroundColor = "rgba(255,255,255,0.7)",
+                e => e.innerText = "消しゴム",
+            ].a2e()),
+        ].a2e()),
+    ].a2e());
+
+    document.body.appendChild([
+        document.createElement("div"),
+        e => e.id = "debug_console",
+        e => e.style.position = "absolute",
+        e => e.style.left = 0,
+        e => e.style.bottom = 0,
+        e => e.style.width = '100%',
+        e => e.style.height = '100px',
+        // e => e.style.left = "10px",
+        // e => e.style.top = "200px",
+        // e => e.style.width = "100px",
+        // e => e.style.height = "400px",
+        e => e.style.overflowY = "auto",
+        e => e.style.whiteSpace = 'pre-wrap',
+        e => e.style.backgroundColor = 'rgba(255, 255, 255, 0.2)',
+    ].a2e());
+    const print_debug_console = (str) => {
+        const elem = document.getElementById("debug_console");
+        elem.textContent += (elem.textContent.length === 0 ? "" : "\n") + str;
+        elem.scrollTop = elem.scrollHeight;
+    };
+
+    // Screen Painterオブジェクトの生成
+    const { CanvasScreenPainter } = await import("./src/CanvasScreenPainter.mjs");
+    await CanvasScreenPainter.init({ brush_color, print_debug_console });
+    let output_canvas_info = smartphone_camera.get_output_canvas();
+    CanvasScreenPainter.set_viewpoint_element(output_canvas_info.elem,
+        output_canvas_info.ctx,
+        output_canvas_info.settings.recognition_canvas_wh);
+
+
+    // lil_guiで設定変更可能なパラメータ
+    const params = {
+        camera_device: smartphone_camera.get_camera_devices()[0].label,
+        output_canvas_css_wh: "",
+        output_canvas_wh: "",
+        output_canvas_camera_wh: "",
+        recognition_canvas_wh: "",
+        dropdowns: {
+            camera_device: smartphone_camera.get_camera_devices().
+                reduce((a, e) => ({ ...a, [[e.label]]: e.deviceId }), {}),
+        },
+        onChanges: {
+            camera_device: async function (deviceId) {
+                video_info = await smartphone_camera.reset_camera_device(deviceId);
+                output_canvas_info = smartphone_camera.get_output_canvas();
+                CanvasScreenPainter.set_viewpoint_element(output_canvas_info.elem,
+                    output_canvas_info.ctx,
+                    output_canvas_info.settings.recognition_canvas_wh);
+                set_output_canvas_info_to_params(video_info, output_canvas_info, this);
+                smartphone_camera.add_ev_handlers(CanvasScreenPainter.get_ev_handlers.bind(CanvasScreenPainter));
+            },
+        },
+        names: {
+            camera_device: "カメラデバイス",
+            output_canvas_css_wh: "cssサイズ",
+            output_canvas_wh: "仮想サイズ",
+            output_canvas_camera_wh: "仮想(カメラ)",
+            recognition_canvas_wh: "認識サイズ",
+        },
+        details: {
+            camera_device: "適切なカメラを選択してください。",
+            output_canvas_css_wh: "表示用キャンバスの見た目(css)サイズ",
+            output_canvas_wh: "表示用キャンバスの仮想サイズ",
+            output_canvas_camera_wh: "表示用キャンバスのカメラ部分の仮想サイズ",
+            recognition_canvas_wh: "認識処理用のキャンバスの仮想サイズ",
+        },
+        disables: [
+            "output_canvas_wh", "output_canvas_css_wh", "output_canvas_camera_wh", "recognition_canvas_wh",
+        ],
+    };
+    set_output_canvas_info_to_params(video_info, output_canvas_info, params);
+
+    // lil_guiの設定
+    import GUI from "https://cdn.jsdelivr.net/npm/lil-gui@0.17/+esm";
+    const gui = new GUI();
+    import { lil_gui_lib } from "./src/libs/lil_gui_lib.mjs";
+    (await lil_gui_lib.init({ libs_backup_folder: "./src/libs" })).set(gui);
+    gui.add_all({ params, folder: gui.addFolder("camera settings"), })
+    gui.add_all({ params: CanvasScreenPainter.params, folder: gui.addFolder("CanvasScreenPainter") });
+    // 240実験用にcommの設定は非表示
+    if (false && CanvasScreenPainter.params.comm_enabled) {
+        gui.add_all({
+            params: CanvasScreenPainter._comm_client.params,
+            folder: gui.addFolder("websocket local status"),
+        });
+    }
+    gui.close();
+
+    // フレームレートの描画
+    // import { Stats } from "../libs/Stats.min.mjs";
+    // const stats = Stats.customInit({ max_fps: 90, elem_lt: [0, 128] });
+    const stats = undefined;
+
+    // 画面タップイベントの登録
+    smartphone_camera.add_ev_handlers(CanvasScreenPainter.get_ev_handlers.bind(CanvasScreenPainter));
+
+    // 描画処理
+    let prev_tm = Date.now();
+    const render = async () => {
+        const tm = Date.now();
+        const dt = tm - prev_tm;
+        smartphone_camera.render();
+        CanvasScreenPainter.recognize({ imageData: smartphone_camera.get_imageData() });
+        CanvasScreenPainter.update_viewpoint();
+
+        stats?.customUpdate(1000.0 / dt);
+
+        prev_tm = tm;
+        requestAnimationFrame(render);
+    }
+    requestAnimationFrame(render);
+</script>
+
+</html>
