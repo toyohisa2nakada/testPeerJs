@@ -244,7 +244,7 @@ export const CanvasScreenPainter = {
             const peer = new Peer();
             peer.on("open", id => {
                 console.log("スマホ Peer ID:", id);
-                const conn = peer.connect("test-pc");
+                const conn = peer.connect("screen-painter-nakada");
                 conn.on("open", () => {
                     console.log("接続成功");
                     this._comm_client = conn;
@@ -272,13 +272,15 @@ export const CanvasScreenPainter = {
         _params: {
             // 1画像から得られる四角形がclusterに保存されているミリ秒
             // rect_expiration_msec: 500, // 手振れに強い（指でなぞるのに最適）
-            rect_expiration_msec: 100, // スマホを動かすのに最適
+            // rect_expiration_msec: 100, // スマホを動かすのに最適
+            rect_expiration_msec: 50, // さらにスマホを動かすのにすぐに反応するように
             // フレーム発見の判断基準となる上記の期間中に四角形が現れている割合
             rect_observation_rate: 0.2,
 
             // 同じクラスターに属する条件：四角形の中心位置の誤差の最小値
             // min_center_distance_ratio: 1.0, // 手振れに強い（指でなぞるのに最適）
-            min_center_distance_ratio: 2.0, // スマホを動かすのに最適
+            // min_center_distance_ratio: 2.0, // スマホを動かすのに最適
+            min_center_distance_ratio: 3.0, // さらにスマホを動かすのにすぐに反応するように
             // 同じクラスターに属する条件：四角形の平均の辺の長さの最小値
             min_sz_ratio: 1.4,
 

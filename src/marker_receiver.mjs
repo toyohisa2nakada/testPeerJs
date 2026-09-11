@@ -194,7 +194,7 @@ export const marker_receiver = {
 
         {
             console.log("PeerJSを使ったWebRTCの接続待ち");
-            const peer = new Peer("test-pc");
+            const peer = new Peer("screen-painter-nakada");
             peer.on("open", id => {
                 console.log("Peer ID:", id);
             });
