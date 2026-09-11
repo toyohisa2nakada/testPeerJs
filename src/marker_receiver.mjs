@@ -193,6 +193,7 @@ export const marker_receiver = {
         // await webrtc();
 
         {
+            console.log("PeerJSを使ったWebRTCの接続待ち");
             const peer = new Peer("test-pc");
             peer.on("open", id => {
                 console.log("Peer ID:", id);
