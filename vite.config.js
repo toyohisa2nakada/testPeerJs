@@ -4,6 +4,7 @@ import { resolve } from 'path'
 
 export default defineConfig({
     plugins: [basicSsl()],
+    base: '/testPeerJs/',
 
     server: {
         host: true,
