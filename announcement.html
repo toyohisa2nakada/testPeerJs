@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>お知らせ</title>
+    <style>
+        /* 画面全体を中央寄せにする設定 */
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f5f5f7;
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", MeiRyo, sans-serif;
+            color: #333333;
+        }
+
+        /* 告知カードのデザイン */
+        .notice-card {
+            background-color: #ffffff;
+            padding: 2.5rem 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            max-width: 580px;
+            width: 90%;
+            box-sizing: border-box;
+        }
+
+        .notice-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            color: #111111;
+        }
+
+        .notice-footer {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #666666;
+            margin-top: 1.5rem;
+        }
+
+        /* 箇条書きのデザイン */
+        .notice-list {
+            text-align: left;
+            padding-left: 1.2rem;
+            margin: 0;
+            line-height: 1.8;
+            font-size: 1rem;
+        }
+
+        .notice-list li {
+            margin-bottom: 0.4rem;
+        }
+
+        .notice-list li:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="notice-card">
+        <h1 class="notice-title">本日(9/14)のラボ事前面談について</h1>
+        <ul class="notice-list">
+            <li><strong>予約状況：</strong>13:00～13:20までは予約が入っています</li>
+            <li><strong>予約された方：</strong>お知らせした時間になったらお入りください</li>
+            <li><strong>予約していない方：</strong>13:20以降にお願いいたします</li>
+        </ul>
+        <div class="notice-footer">
+            右のQRコードを読んで、スマホからこの画面にお絵描きをすることができます
+        </div>
+    </div>
+
+</body>
+
+</html>
