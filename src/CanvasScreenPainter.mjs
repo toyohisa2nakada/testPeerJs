@@ -211,7 +211,7 @@ export const CanvasScreenPainter = {
         // ものをwebsocketで送り続ける。コメントアウトするとwebsocket通信は行わない。
         if (this.params.comm_enabled) {
             const websocket = async () => {
-                this._comm_client = (await import("./libs/CommClient.mjs")).CommClient;
+                this._comm_client = (await import("../src/libs/CommClient.mjs")).CommClient;
                 this._comm_client.params.avaiable = true;
                 this._comm_client.init(`CanvasScreenPainter`, {
                     server_cmd: e => {

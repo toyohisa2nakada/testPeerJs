@@ -49,7 +49,6 @@
     import { local_qrcode } from "./src/libs/local_qrcode.js";
     await local_qrcode.inject({ elem: document.getElementById("qr_code") })
     document.getElementById("own_url").textContent = await local_qrcode.url();
-
   </script>
 </body>
 

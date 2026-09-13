@@ -10,7 +10,7 @@
 
 <body>
 </body>
-<script src="./src/libs/hammer.min.js"></script>
+<script type="module" src="./src/libs/hammer.min.js"></script>
 <script type="module">
 
     // 要素を作ってプロパティを設定する。
@@ -166,20 +166,20 @@
     set_output_canvas_info_to_params(video_info, output_canvas_info, params);
 
     // lil_guiの設定
-    import GUI from "https://cdn.jsdelivr.net/npm/lil-gui@0.17/+esm";
-    const gui = new GUI();
-    import { lil_gui_lib } from "./src/libs/lil_gui_lib.mjs";
-    (await lil_gui_lib.init({ libs_backup_folder: "./src/libs" })).set(gui);
-    gui.add_all({ params, folder: gui.addFolder("camera settings"), })
-    gui.add_all({ params: CanvasScreenPainter.params, folder: gui.addFolder("CanvasScreenPainter") });
-    // 240実験用にcommの設定は非表示
-    if (false && CanvasScreenPainter.params.comm_enabled) {
-        gui.add_all({
-            params: CanvasScreenPainter._comm_client.params,
-            folder: gui.addFolder("websocket local status"),
-        });
-    }
-    gui.close();
+    // import GUI from "https://cdn.jsdelivr.net/npm/lil-gui@0.17/+esm";
+    // const gui = new GUI();
+    // import { lil_gui_lib } from "./src/libs/lil_gui_lib.mjs";
+    // (await lil_gui_lib.init({ libs_backup_folder: "./src/libs" })).set(gui);
+    // gui.add_all({ params, folder: gui.addFolder("camera settings"), })
+    // gui.add_all({ params: CanvasScreenPainter.params, folder: gui.addFolder("CanvasScreenPainter") });
+    // // 240実験用にcommの設定は非表示
+    // if (false && CanvasScreenPainter.params.comm_enabled) {
+    //     gui.add_all({
+    //         params: CanvasScreenPainter._comm_client.params,
+    //         folder: gui.addFolder("websocket local status"),
+    //     });
+    // }
+    // gui.close();
 
     // フレームレートの描画
     // import { Stats } from "../libs/Stats.min.mjs";

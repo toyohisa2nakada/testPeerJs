@@ -15,8 +15,9 @@ export const VideoImage = {
     },
     init: async function () {
         // このmjsファイルのパスを取得して同階層にあるopencvを読み込む
-        const folder = import.meta.url.match(/^https?:\/\/[^\/]+(\/(?:[^?#]*\/)*)([^?#]+)/)[1];
-        await this.load_script(`${folder}opencv.4.9.0.js`);
+        // const folder = import.meta.url.match(/^https?:\/\/[^\/]+(\/(?:[^?#]*\/)*)([^?#]+)/)[1];
+        // await this.load_script(`${folder}opencv.4.9.0.js`);
+        await this.load_script("https://activecamera.pecode.com/libs/webcamera/opencv.4.9.0.js");
         // console.log(`loaded opencv ${cv}`);
         return 0;
     },

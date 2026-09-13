@@ -100,7 +100,7 @@ export const marker_receiver = {
     //     }
     // },
     _comm_init: async function ({ handler }) {
-        const comm_client = (await import("./libs/CommClient.mjs")).CommClient;
+        const comm_client = (await import("../src/libs/CommClient.mjs")).CommClient;
         comm_client.params.avaiable = true;
         comm_client.init(`qr_code_receiver`, {
             server_cmd: e => {
