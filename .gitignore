@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# webrtc (apiキーなどの機密情報を隠す)
+src/libs/webrtc/*
