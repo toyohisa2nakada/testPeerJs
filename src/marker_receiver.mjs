@@ -82,23 +82,23 @@ export const marker_receiver = {
         offset: undefined,
         wh: undefined,
     },
-    _webrtc_init: async function ({ handler }) {
-        const webrtc = await import("./libs/webrtc/webrtc.js");
-        while (true) {
-            try {
-                const channel = await webrtc.listen({ connection_expiry: Date.now() - 1 * 10 * 1000, timeout: 10 * 1000 });
-                console.log("connected", JSON.stringify(channel));
-                channel.onmessage = e => {
-                    console.log(e);
-                    const data = JSON.parse(e.data);
-                    handler(data, channel);
-                }
-            } catch (error) {
-                // timeoutなので何も処理をせずに再度listenにはいる。
-                // タイムアウト処理を入れないと、中途半端に接続処理が行われた場合の自動初期化ができなくなる。
-            }
-        }
-    },
+    // _webrtc_init: async function ({ handler }) {
+    //     const webrtc = await import("./libs/webrtc/webrtc.js");
+    //     while (true) {
+    //         try {
+    //             const channel = await webrtc.listen({ connection_expiry: Date.now() - 1 * 10 * 1000, timeout: 10 * 1000 });
+    //             console.log("connected", JSON.stringify(channel));
+    //             channel.onmessage = e => {
+    //                 console.log(e);
+    //                 const data = JSON.parse(e.data);
+    //                 handler(data, channel);
+    //             }
+    //         } catch (error) {
+    //             // timeoutなので何も処理をせずに再度listenにはいる。
+    //             // タイムアウト処理を入れないと、中途半端に接続処理が行われた場合の自動初期化ができなくなる。
+    //         }
+    //     }
+    // },
     _comm_init: async function ({ handler }) {
         const comm_client = (await import("./libs/CommClient.mjs")).CommClient;
         comm_client.params.avaiable = true;
@@ -187,9 +187,9 @@ export const marker_receiver = {
         const websocket = async () => {
             await this._comm_init({ handler: this._websocket_handler.bind(this), });
         }
-        const webrtc = async () => {
-            await this._webrtc_init({ handler: this._websocket_handler.bind(this), });
-        }
+        // const webrtc = async () => {
+        //     await this._webrtc_init({ handler: this._websocket_handler.bind(this), });
+        // }
         // await webrtc();
 
         {

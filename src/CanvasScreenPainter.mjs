@@ -222,23 +222,23 @@ export const CanvasScreenPainter = {
                     text: e => { },
                 });
             }
-            const webrtc = async () => {
-                const webrtc = await import("./libs/webrtc/webrtc.js");
-                const room_id = `room_${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`
-                console.log("before connect ", room_id)
-                this._comm_client = await webrtc.connect({ room_id, print_debug_console: this._print_debug_console });
-                const send0 = this._comm_client.send.bind(this._comm_client);
-                this._comm_client.send = function (data) {
-                    return send0(JSON.stringify(data));
-                }
-                this._comm_client.onmessage = e => {
-                    // alert(JSON.stringify(e));
-                    // this._print_debug_console?.(`vibrate ${e.data}`)
-                    navigator.vibrate(e.data === "explosion" ? 200 : 10);
-                }
-                console.log("connected");
-                this._print_debug_console?.("webrtc connected")
-            }
+            // const webrtc = async () => {
+            //     const webrtc = await import("./libs/webrtc/webrtc.js");
+            //     const room_id = `room_${Math.floor(Math.random() * 100000).toString().padStart(5, '0')}`
+            //     console.log("before connect ", room_id)
+            //     this._comm_client = await webrtc.connect({ room_id, print_debug_console: this._print_debug_console });
+            //     const send0 = this._comm_client.send.bind(this._comm_client);
+            //     this._comm_client.send = function (data) {
+            //         return send0(JSON.stringify(data));
+            //     }
+            //     this._comm_client.onmessage = e => {
+            //         // alert(JSON.stringify(e));
+            //         // this._print_debug_console?.(`vibrate ${e.data}`)
+            //         navigator.vibrate(e.data === "explosion" ? 200 : 10);
+            //     }
+            //     console.log("connected");
+            //     this._print_debug_console?.("webrtc connected")
+            // }
             // await webrtc();
 
             const peer = new Peer();
