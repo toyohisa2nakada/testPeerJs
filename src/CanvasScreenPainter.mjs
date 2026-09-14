@@ -395,15 +395,24 @@ export const CanvasScreenPainter = {
             const dst_points = cv.matFromArray(4, 2, cv.CV_32FC1, [[0, 0], [1, 0], [1, 1], [0, 1]].flat());
             const to_delete = [src_points, dst_points];
 
-            const affine_matrix_mat = cv.estimateAffine2D(src_points, dst_points);
-            to_delete.push(affine_matrix_mat);
+            // アフィン変換行列を求める。src_pointsをdst_pointsに変換するアフィン変換行列を求める。
+            // ただアフィン変換は平行な線を平行として変換するので、スマホで撮ったスクリーンを正しく変換できていない
+            // const affine_matrix_mat = cv.estimateAffine2D(src_points, dst_points);
+            // to_delete.push(affine_matrix_mat);
+
+            // 4点対応から射影変換（ホモグラフィ 3x3）を求める
+            const homography_mat = cv.getPerspectiveTransform(src_points, dst_points);
+            to_delete.push(homography_mat);
 
             const affine = {
-                mat: [...Array(6).keys()].map(i => affine_matrix_mat.data64F[i]),
+                mat: [...Array(9).keys()].map(i => homography_mat.data64F[i]),
                 tr: function (p) {
                     const p1 = [...p, 1];
-                    return [this.mat.slice(0, 3).reduce((a, e, i) => a + e * p1[i], 0),
-                    this.mat.slice(3).reduce((a, e, i) => a + e * p1[i], 0)];
+                    // return [this.mat.slice(0, 3).reduce((a, e, i) => a + e * p1[i], 0),
+                    // this.mat.slice(3).reduce((a, e, i) => a + e * p1[i], 0)];
+                    const row = r => this.mat.slice(r * 3, r * 3 + 3).reduce((a, e, i) => a + e * p1[i], 0);
+                    const w = row(2);
+                    return [row(0) / w, row(1) / w];
                 },
                 equals: function (t) {
                     return t !== undefined && this.mat.length === t.mat.length &&
