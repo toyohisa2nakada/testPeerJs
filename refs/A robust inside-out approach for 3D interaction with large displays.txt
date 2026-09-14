@@ -1,7 +1,0 @@
-2015
-
-A robust inside-out approach for 3D interaction with large displays
-David Scherfgen; Rainer Herpers; Timur Saitov
-
-Abstract:
-In this contribution, we present several improvements to previous Åginside-outÅh techniques for pointing interaction with large display systems. Fiducial markers are virtually projected from an interaction device's built-in camera onto the displays and overlaid to the display content. We reconstruct the 6-DoF camera pose by tracking these markers in real-time. For increased robustness, the marker pattern is dynamically adapted. We address display lag and high pixel response times by precisely timing image captures. Pointing locations are measured with sub-millimeter precision and camera positions with sub-centimeter precision. An update rate of 60 Hz and a latency of 24 ms were achieved. Our technique performed comparably to an OptiTrack system in 2D target selection tasks.
