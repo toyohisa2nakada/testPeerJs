@@ -244,7 +244,7 @@ export const CanvasScreenPainter = {
             const peer = new Peer();
             peer.on("open", id => {
                 console.log("スマホ Peer ID:", id);
-                const conn = peer.connect("screen-painter-nakada");
+                const conn = peer.connect("screen-painter-nakada-20260915");
                 conn.on("open", () => {
                     console.log("接続成功");
                     this._comm_client = conn;
